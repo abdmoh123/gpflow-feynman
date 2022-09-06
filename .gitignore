@@ -1,3 +1,5 @@
 *.dat
 results/
 data/
+__pycache__/
+.idea/
