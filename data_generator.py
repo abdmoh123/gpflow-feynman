@@ -7,10 +7,6 @@ def generate_sine_wave(x, amplitude=1, s_n_ratio=0):
     return (amplitude * np.sin(x)) + noise
 
 
-def generate_2D_sine(x0, x1, amplitude=1, s_n_ratio=0):
-    return amplitude * np.sin(x0, x1)
-
-
 # generates a square wave with optional noise
 def generate_square_wave(x, squareness=1000, amplitude=1, s_n_ratio=0):
     y = temp = x
