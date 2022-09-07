@@ -32,7 +32,7 @@ def main():
     elif FILE_NAME == "noisy_square":
         Y = generate_square_wave(X, amplitude=AMPLITUDE, s_n_ratio=SIGNAL_NOISE_RATIO)
     else:
-        Y = read_data("./data/"+FILE_NAME)[1]
+        Y = read_file("./data/"+FILE_NAME)[1]
     # randomly samples from the dataset
     data = np.random.permutation(np.concatenate((X, Y)).reshape((-1, 2), order='F'))
     training_data = data[:np.ceil(TRAIN_TEST_RATIO*DATA_LENGTH).astype(int), :]
@@ -46,7 +46,7 @@ def main():
     # run_aifeynman("./data/", FILE_NAME+".dat", 30, "14ops.txt", polyfit_deg=3, NN_epochs=100)
 
     # reads and converts the AI feynman solution/equation to an evaluable format
-    feynman_solution_array = read_data("./results/solution_"+FILE_NAME+".dat")
+    feynman_solution_array = read_file("./results/solution_"+FILE_NAME+".dat")
     shape = np.array(feynman_solution_array.shape) - 1
     feynman_solution = convert_feynman(str(feynman_solution_array[shape[0], shape[1]]))
     print(feynman_solution)
@@ -64,8 +64,8 @@ def main():
 
     # optimises the kernel and GP model
     optimiser = gpflow.optimizers.Scipy()
-    optimiser.minimize(model_with_feynman.training_loss, model_with_feynman.trainable_variables)
-    optimiser.minimize(model_without_feynman.training_loss, model_without_feynman.trainable_variables)
+    optimiser.minimize(model_with_feynman.training_loss, model_with_feynman.trainable_variables, options=dict(maxiter=1000))
+    optimiser.minimize(model_without_feynman.training_loss, model_without_feynman.trainable_variables, options=dict(maxiter=1000))
     print("\nAfter optimisation\n============================================\nWith AI Feynman as mean function:")
     print_summary(model_with_feynman)
     print("With NO mean function:")
