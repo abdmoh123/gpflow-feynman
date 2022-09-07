@@ -9,7 +9,7 @@ def main():
     # runs AI feynman on a generated sine wave
     run_aifeynman("./data/", "noisy_sine.dat", 30, "14ops.txt", polyfit_deg=3, NN_epochs=100)
     # runs AI feynman on a generated square wave
-    # run_aifeynman("./data/", "noisy_sine.dat", 30, "14ops.txt", polyfit_deg=3, NN_epochs=100)
+    # run_aifeynman("./data/", "noisy_square.dat", 30, "14ops.txt", polyfit_deg=3, NN_epochs=100)
 
 
 if __name__ == '__main__':

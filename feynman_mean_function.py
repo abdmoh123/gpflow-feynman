@@ -11,5 +11,5 @@ class FeynmanMean(MeanFunction):
         self.equation = equation
 
     def __call__(self, X: TensorType) -> tf.Tensor:
-        X_TEST = np.array(X)
-        return eval(self.equation)
+        temp_X = np.array(X)  # converts tensor to np array
+        return eval(self.equation).reshape(-1, 1)  # ensures 1D output

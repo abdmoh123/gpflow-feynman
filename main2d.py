@@ -18,27 +18,30 @@ def main():
     SIGNAL_NOISE_RATIO = 10
     TRAIN_TEST_RATIO = 0.2
     NUM_SAMPLES = 10
-    # FILE_NAME = "noisy_sine"
-    FILE_NAME = "noisy_square"
+    FILE_NAME = "noisy_sine_2D"
+    # FILE_NAME = "noisy_square_2D"
 
     # disables PyTorch GPU support
     torch.cuda.is_available = lambda: False
 
     np.random.seed(1)  # for reproducibility
     # generates data into a np array
-    X = np.linspace(0, 2 * np.pi, DATA_LENGTH)
-    if FILE_NAME == "noisy_sine":
-        Y = generate_sine_wave(X, amplitude=AMPLITUDE, s_n_ratio=SIGNAL_NOISE_RATIO)
-    elif FILE_NAME == "noisy_square":
-        Y = generate_square_wave(X, amplitude=AMPLITUDE, s_n_ratio=SIGNAL_NOISE_RATIO)
+    x0 = np.linspace(0, 2 * np.pi, DATA_LENGTH)
+    x1 = x0
+    if FILE_NAME == "noisy_sine_2D":
+        x1 = generate_cos_wave(10 * x0, amplitude=AMPLITUDE)
+        Y = generate_sine_wave(x0, AMPLITUDE, SIGNAL_NOISE_RATIO) * x1
+    elif FILE_NAME == "noisy_square_2D":
+        x1 = generate_square_wave(10 * x0, amplitude=AMPLITUDE)
+        Y = generate_square_wave(x0, amplitude=AMPLITUDE, s_n_ratio=SIGNAL_NOISE_RATIO) * x1
     else:
-        Y = read_data("./data/"+FILE_NAME)[1]
+        Y = read_data("./data/"+FILE_NAME)[2]
     # randomly samples from the dataset
-    data = np.random.permutation(np.concatenate((X, Y)).reshape((-1, 2), order='F'))
+    data = np.random.permutation(np.concatenate((x0, x1, Y)).reshape((-1, 3), order='F'))
     training_data = data[:np.ceil(TRAIN_TEST_RATIO*DATA_LENGTH).astype(int), :]
     training_data = training_data[training_data[:, 0].argsort()]
-    X_TRAIN = training_data[:, 0].reshape(-1, 1)
-    Y_TRAIN = training_data[:, 1].reshape(-1, 1)
+    X_TRAIN = training_data[:, 0:2].reshape(-1, 2)
+    Y_TRAIN = training_data[:, 2].reshape(-1, 1)
 
     # saves data to a csv file so AI feynman can run
     write_data(training_data, FILE_NAME)
@@ -64,30 +67,33 @@ def main():
 
     # optimises the kernel and GP model
     optimiser = gpflow.optimizers.Scipy()
-    optimiser.minimize(model_with_feynman.training_loss, model_with_feynman.trainable_variables)
-    optimiser.minimize(model_without_feynman.training_loss, model_without_feynman.trainable_variables)
+    optimiser.minimize(model_with_feynman.training_loss, model_with_feynman.trainable_variables, options=dict(maxiter=1000))
+    optimiser.minimize(model_without_feynman.training_loss, model_without_feynman.trainable_variables, options=dict(maxiter=1000))
     print("\nAfter optimisation\n============================================\nWith AI Feynman as mean function:")
     print_summary(model_with_feynman)
     print("With NO mean function:")
     print_summary(model_without_feynman)
 
     # calculates the mean and variance of the GP as well as a few samples
-    X_TEST = np.linspace(-1 * np.pi, 3 * np.pi, DATA_LENGTH * 2).reshape(-1, 1)
+    x0_test = np.linspace(-1 * np.pi, 3 * np.pi, DATA_LENGTH * 2)
+    x1_test = generate_cos_wave(10 * x0_test, AMPLITUDE)
+    X_TEST = np.concatenate((x0_test.reshape(-1, 1), x1_test.reshape(-1, 1))).reshape((-1, 2), order='F')
     # GPR with AI feynman solution as mean function
     mean_ai, var_ai = model_with_feynman.predict_y(X_TEST)
     samples_ai = model_with_feynman.predict_f_samples(X_TEST, NUM_SAMPLES)
     # calculates Y values using AI feynman's solution
-    temp_X = X_TEST
+    temp_X = np.stack((x0_test, x1_test), axis=-1)
+    print(temp_X)
     feynman_prediction = eval(feynman_solution)
     # GPR without AI feynman
     mean, var = model_without_feynman.predict_y(X_TEST)
     samples = model_without_feynman.predict_f_samples(X_TEST, NUM_SAMPLES)
 
     # generates the original data without noise
-    if FILE_NAME == "noisy_sine":
-        ground_truth = generate_sine_wave(X_TEST.reshape(1, -1)[0], amplitude=AMPLITUDE)
-    elif FILE_NAME == "noisy_square":
-        ground_truth = generate_square_wave(X_TEST.reshape(1, -1)[0], amplitude=AMPLITUDE)
+    if FILE_NAME == "noisy_sine_2D":
+        ground_truth = generate_sine_wave(X_TEST[:, 0], amplitude=AMPLITUDE) * X_TEST[:, 1]
+    elif FILE_NAME == "noisy_square_2D":
+        ground_truth = generate_square_wave(X_TEST[:, 0], amplitude=AMPLITUDE) * X_TEST[:, 1]
     else:
         print("Error: Invalid file name!")
         exit()
@@ -113,9 +119,9 @@ def main():
     ax.tick_params(labelcolor='w', top=False, bottom=False, left=False, right=False)
     ax.set_xlabel("X axis (radians based)")
     ax.set_ylabel("Y axis")
-    axes = fig.subplots(2, 2, sharex=True, sharey=False)
+    axes = fig.subplots(2, 2, sharex=True, sharey=True)
     # GP regression with AI feynman
-    axes[0, 0].plot(X_TRAIN, Y_TRAIN, "kx", label="Training data")
+    axes[0, 0].plot(X_TRAIN[:, 0], Y_TRAIN, "kx", label="Training data")
     axes[0, 0].fill_between(
         X_TEST[:, 0],
         mean_ai[:, 0] - (2 * np.sqrt(var_ai[:, 0])),
@@ -123,12 +129,12 @@ def main():
         alpha=0.2,
         label="2 std confidence"
     )
-    axes[0, 0].plot(X_TEST, samples_ai[:, :, 0].numpy().T, linewidth=0.5)
-    axes[0, 0].plot(X_TEST, mean_ai, color="tab:cyan", lw=2, label="Mean aided by AI Feynman")
+    axes[0, 0].plot(X_TEST[:, 0], samples_ai[:, :, 0].numpy().T, linewidth=0.5)
+    axes[0, 0].plot(X_TEST[:, 0], mean_ai, color="tab:cyan", lw=2, label="Mean aided by AI Feynman")
     # AI feynman on its own
-    axes[0, 1].plot(X_TEST, feynman_prediction, color="tab:cyan", label="AI Feynman solution")
+    axes[0, 1].plot(X_TEST[:, 0], feynman_prediction, color="tab:cyan", label="AI Feynman solution")
     # GP regression without AI feynman
-    axes[1, 0].plot(X_TRAIN, Y_TRAIN, "kx", label="Training data")
+    axes[1, 0].plot(X_TRAIN[:, 0], Y_TRAIN, "kx", label="Training data")
     axes[1, 0].fill_between(
         X_TEST[:, 0],
         mean[:, 0] - (2 * np.sqrt(var[:, 0])),
@@ -136,24 +142,26 @@ def main():
         alpha=0.2,
         label="2 std confidence"
     )
-    axes[1, 0].plot(X_TEST, samples[:, :, 0].numpy().T, linewidth=0.5)
-    axes[1, 0].plot(X_TEST, mean, color="tab:cyan", lw=2, label="Mean without AI Feynman")
+    axes[1, 0].plot(X_TEST[:, 0], samples[:, :, 0].numpy().T, linewidth=0.5)
+    axes[1, 0].plot(X_TEST[:, 0], mean, color="tab:cyan", lw=2, label="Mean without AI Feynman")
     # Original data
-    axes[1, 1].plot(X.reshape(DATA_LENGTH, 1), Y.reshape(DATA_LENGTH, 1), color="tab:cyan", label="Original data")
+    axes[1, 1].plot(x0, Y, color="tab:cyan", label="Original data")
     for i in range(len(axes)):
         for j in range(len(axes[i])):
             axes[i, j].legend()
     plt.show()
 
-
 # converts the equation created by AI feynman to an evaluable format
 def convert_feynman(solution):
+    solution = solution.replace("x0", "temp_X[:, 0]")
+    solution = solution.replace("x1", "temp_X[:, 1]")
     solution = solution.replace("sin", "np.sin")
     solution = solution.replace("cos", "np.cos")
     solution = solution.replace("tan", "np.tan")
     solution = solution.replace("pi", "np.pi")
     solution = solution.replace("log", "np.log")
-    solution = solution.replace("x0", "temp_X")
+    solution = solution.replace("sqrt", "np.sqrt")
+    solution = solution.replace("exp", "np.exp")
     return solution
 
 
